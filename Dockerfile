@@ -12,7 +12,7 @@ COPY --from=code.forgejo.org/forgejo/runner:6.2.2 /bin/forgejo-runner /usr/local
 
 # OpenCode config pointing to your Ollama instance
 RUN mkdir -p /root/.config/opencode
-COPY opencode-config/config.json /root/.config/opencode/config.json
+COPY opencode-config/opencode.json /root/.config/opencode/opencode.json
 
 WORKDIR /data
 
