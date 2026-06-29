@@ -447,12 +447,12 @@ jobs:
       - name: Create Forgejo release + upload artifact
         id: upload
         env:
-          # Use the forgejo-actions auto-token for the in-repo release
+          # Use the github auto-token for the in-repo release
           # API. TAP_TOKEN is the maintainer's cross-repo token
           # intended for the homebrew tap and may lack write
           # permission on this repo (which produced HTTP 403 with
           # 'user should have a permission to write to a repo').
-          FORGEJO_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           VERSION:      ${{ steps.bump.outputs.version }}
           BIN_NAME:     ${{ needs.detect.outputs.bin_name }}
           LANGUAGE:     ${{ needs.detect.outputs.language }}
@@ -461,9 +461,9 @@ jobs:
           TAG="v$VERSION"
           BIN="$BIN_NAME"
 
-          if [ -z "${FORGEJO_TOKEN:-}" ]; then
-            echo "::error::FORGEJO_TOKEN (github.token) is empty; cannot create release"
-            echo "::error::ensure forgejo-actions auto-token is enabled on the runner"
+          if [ -z "${GITHUB_TOKEN:-}" ]; then
+            echo "::error::GITHUB_TOKEN (github.token) is empty; cannot create release"
+            echo "::error::ensure github-actions auto-token is enabled on the runner"
             exit 1
           fi
 
@@ -518,8 +518,8 @@ jobs:
           # so we can print a useful error message instead of dying
           # silently with curl -f's exit-22 on 4xx/5xx.
           HTTP=$(curl -s -o /tmp/release_resp.json -w "%{http_code}" \
-            -X POST "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/releases" \
-            -H "Authorization: token $FORGEJO_TOKEN" \
+            -X POST "https://api.github.com/repos/$GITHUB_REPOSITORY/releases" \
+            -H "Authorization: token $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
             --data-binary @/tmp/release_payload.json)
           echo "release create HTTP $HTTP"
@@ -543,8 +543,8 @@ jobs:
               sleep $((attempt * 3))
               HTTP=$(curl -s -o /tmp/upload_body.json -w "%{http_code}" \
                 -X POST \
-                "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=$ASSET_NAME" \
-                -H "Authorization: token $FORGEJO_TOKEN" \
+                "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=$ASSET_NAME" \
+                -H "Authorization: token $GITHUB_TOKEN" \
                 -H "Content-Type: application/octet-stream" \
                 --data-binary "@$ASSET")
               echo "asset upload attempt $attempt: HTTP $HTTP"
@@ -732,11 +732,11 @@ jobs:
           TAG:       ${{ needs.release.outputs.tag }}
           GITHUB_SERVER_URL: ${{ github.server_url }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          # In-repo release-asset upload: use the forgejo-actions
+          # In-repo release-asset upload: use the github-actions
           # auto-token. TAP_TOKEN is reserved for the cross-repo tap
           # sync (see 'Sync formula to external tap repo' below) and
           # may not have write permission on this repo.
-          FORGEJO_TOKEN:     ${{ github.token }}
+          GITHUB_TOKEN:     ${{ github.token }}
         run: |
           set -euo pipefail
           for ARCH in x86_64_linux arm64_linux; do
@@ -755,8 +755,8 @@ jobs:
               sleep $((attempt * 3))
               HTTP=$(curl -s -o /tmp/upload_body.json -w "%{http_code}" \
                 -X POST \
-                "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=$BOTTLE_NAME" \
-                -H "Authorization: token $FORGEJO_TOKEN" \
+                "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=$BOTTLE_NAME" \
+                -H "Authorization: token $GITHUB_TOKEN" \
                 -H "Content-Type: application/octet-stream" \
                 --data-binary "@$BOTTLE")
               echo "  attempt $attempt: HTTP $HTTP"
@@ -947,8 +947,8 @@ jobs:
       - name: Delete orphaned issue branches + toggle stale labels
         env:
           # tidy talks to the in-repo API (delete branches, toggle
-          # labels); use the forgejo-actions auto-token.
-          FORGEJO_TOKEN: ${{ github.token }}
+          # labels); use the github-actions auto-token.
+          GITHUB_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           ISSUE_BRANCH_PREFIX: ${{ vars.ISSUE_BRANCH_PREFIX || 'issue-' }}
           GITHUB_SERVER_URL: ${{ github.server_url }}
@@ -957,20 +957,19 @@ jobs:
           # Don't silently fall back to a placeholder URL; a wrong
           # server would otherwise cause API calls to fail with
           # connection errors while the job still reports green.
-          if [ -z "${GITHUB_SERVER_URL:-}" ] || [ "$GITHUB_SERVER_URL" = "http://forgejo:3000" ]; then
-            echo "::error::GITHUB_SERVER_URL is unset or defaulted to placeholder: '$GITHUB_SERVER_URL'"
-            echo "::error::tidy cannot talk to the Forgejo API. Check runner / Forgejo Actions configuration."
+          if [ -z "${GITHUB_SERVER_URL:-}" ]; then
+            echo "::error::GITHUB_SERVER_URL is unset"
+            echo "::error::tidy cannot talk to the GitHub API. Check runner configuration."
             exit 1
           fi
-          SERVER="$GITHUB_SERVER_URL"
+          SERVER="https://api.github.com"
+          TOKEN="$GITHUB_TOKEN"
 
           python3 - << 'PYEOF'
           import os, json, urllib.request, urllib.error
           from datetime import datetime, timezone, timedelta
 
-          TOKEN      = os.environ['FORGEJO_TOKEN']
           REPO       = os.environ['REPO']
-          SERVER     = os.environ['GITHUB_SERVER_URL']
           PREFIX     = os.environ.get('ISSUE_BRANCH_PREFIX', 'issue-')
           STALE_DAYS = 30
           TRACK      = {'bug', 'enhancement'}
@@ -989,7 +988,7 @@ jobs:
                   print(f"HTTP {e.code}: {method} {path}", file=__import__('sys').stderr)
                   return {}
 
-          branches = [b['name'] for b in api("GET", f"repos/{REPO}/branches?limit=100") or []
+          branches = [b['name'] for b in api("GET", f"repos/{REPO}/branches?per_page=100") or []
                       if b['name'].startswith(PREFIX)]
 
           for branch in branches:
@@ -1007,7 +1006,7 @@ jobs:
                   print(f"skip {branch}: issue #{issue_n} still open")
 
           stale_id = None
-          issues = api("GET", f"repos/{REPO}/issues?state=open&type=issues&limit=100") or []
+          issues = api("GET", f"repos/{REPO}/issues?state=open&per_page=100") or []
 
           for issue in issues:
               labels  = {l['name']: l['id'] for l in issue.get('labels', [])}

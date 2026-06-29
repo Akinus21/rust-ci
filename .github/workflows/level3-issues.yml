@@ -66,13 +66,13 @@ jobs:
       - name: Check labels (only auto-fix bug/enhancement)
         id: check
         env:
-          FORGEJO_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           ISSUE_NUMBER="${{ github.event.issue.number }}"
           ISSUE_JSON=$(curl -s \
-            "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER" \
-            -H "Authorization: token $FORGEJO_TOKEN")
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER" \
+            -H "Authorization: token $GITHUB_TOKEN")
           LABELS=$(echo "$ISSUE_JSON" | python3 -c "
           import sys, json
           try:
@@ -122,15 +122,15 @@ jobs:
 
       - name: Fetch issue comments
         env:
-          FORGEJO_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           # curl -s exits 0 even on HTTP errors, so we add -f and a
           # JSON-validity check; if either fails, fall back to [] so
           # the prompt builder doesn't choke.
           if ! curl -fsS \
-              "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/issues/${{ github.event.issue.number }}/comments" \
-              -H "Authorization: token $FORGEJO_TOKEN" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/${{ github.event.issue.number }}/comments" \
+              -H "Authorization: token $GITHUB_TOKEN" \
               -o /tmp/comments.json \
             || ! python3 -c "import json,sys; json.load(open('/tmp/comments.json'))" >/dev/null 2>&1; then
             echo '[]' > /tmp/comments.json
@@ -272,13 +272,13 @@ jobs:
     steps:
       - name: Acknowledge
         env:
-          FORGEJO_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           jq -n '{body:"Thanks for reporting - a maintainer will investigate."}' > /tmp/c.json
           curl -s -X POST \
-            "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/issues/${{ github.event.issue.number }}/comments" \
-            -H "Authorization: token $FORGEJO_TOKEN" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/${{ github.event.issue.number }}/comments" \
+            -H "Authorization: token $GITHUB_TOKEN" \
             -H "Content-Type: application/json" -d @/tmp/c.json
 
   skip-notify:
@@ -288,7 +288,7 @@ jobs:
     steps:
       - name: Post skip reason
         env:
-          FORGEJO_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           REASON: ${{ needs.triage.outputs.reason }}
         run: |
           set -euo pipefail
@@ -310,8 +310,8 @@ jobs:
           BODY=$(REASON="$REASON" python3 /tmp/build_skip_body.py)
           jq -n --arg body "$BODY" '{body:$body}' > /tmp/c.json
           curl -s -X POST \
-            "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/issues/${{ github.event.issue.number }}/comments" \
-            -H "Authorization: token $FORGEJO_TOKEN" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/${{ github.event.issue.number }}/comments" \
+            -H "Authorization: token $GITHUB_TOKEN" \
             -H "Content-Type: application/json" -d @/tmp/c.json
 
   create-fix-branch:
@@ -350,14 +350,14 @@ jobs:
           # Used by the prompt builder to switch between bug (fix) and
           # enhancement (implement) modes.
           ISSUE_LABELS: ${{ join(github.event.issue.labels.*.name, ',') }}
-          FORGEJO_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           # curl -s exits 0 even on HTTP errors; add -fS + JSON check
           # and fall back to [] if anything goes wrong.
           if ! curl -fsS \
-              "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments" \
-              -H "Authorization: token $FORGEJO_TOKEN" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments" \
+              -H "Authorization: token $GITHUB_TOKEN" \
               -o /tmp/comments.json \
             || ! python3 -c "import json,sys; json.load(open('/tmp/comments.json'))" >/dev/null 2>&1; then
             echo '[]' > /tmp/comments.json
@@ -494,7 +494,7 @@ jobs:
       - name: Comment when AI produced no changes
         if: steps.commit.outputs.pushed != 'true'
         env:
-          FORGEJO_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           ISSUE_NUM="${{ github.event.issue.number }}"
@@ -502,14 +502,14 @@ jobs:
           jq -n --arg body "Auto-triage: I tried to generate a fix for this issue but couldn't produce a usable code change. A human maintainer will need to look at this manually. The 'bug' or 'enhancement' label can be removed and re-added to retry." \
             '{body:$body}' > /tmp/c.json
           curl -s -X POST \
-            "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUM/comments" \
-            -H "Authorization: token $FORGEJO_TOKEN" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUM/comments" \
+            -H "Authorization: token $GITHUB_TOKEN" \
             -H "Content-Type: application/json" -d @/tmp/c.json > /dev/null
 
       - name: Close issue with summary
         if: steps.commit.outputs.pushed == 'true'
         env:
-          FORGEJO_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           ISSUE_NUM="${{ github.event.issue.number }}"
@@ -517,12 +517,12 @@ jobs:
           jq -n --arg body "Auto-closed: an AI-generated fix has been opened as a PR against the devops branch. Merge it to land the change." \
             '{body:$body}' > /tmp/c.json
           curl -s -X POST \
-            "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUM/comments" \
-            -H "Authorization: token $FORGEJO_TOKEN" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUM/comments" \
+            -H "Authorization: token $GITHUB_TOKEN" \
             -H "Content-Type: application/json" -d @/tmp/c.json > /dev/null
           curl -s -X PATCH \
-            "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUM" \
-            -H "Authorization: token $FORGEJO_TOKEN" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUM" \
+            -H "Authorization: token $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
             -d '{"state":"closed"}' > /dev/null
           echo "issue #$ISSUE_NUM closed"
@@ -541,15 +541,15 @@ jobs:
       - name: Open PR issue-N -> devops
         if: steps.commit.outputs.pushed == 'true'
         env:
-          FORGEJO_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           BRANCH: ${{ needs.triage.outputs.branch_name }}
           BASE:   ${{ env.DEVOPS_BRANCH }}
           ISSUE:  ${{ github.event.issue.number }}
         run: |
           set -euo pipefail
           EXISTING=$(curl -s \
-            "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/pulls?state=open&head=$BRANCH&base=$BASE" \
-            -H "Authorization: token $FORGEJO_TOKEN")
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls?state=open&head=$BRANCH&base=$BASE" \
+            -H "Authorization: token $GITHUB_TOKEN")
           COUNT=$(echo "$EXISTING" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo 0)
           if [ "$COUNT" -gt 0 ]; then
             echo "PR already open for $BRANCH -> $BASE - skipping."
@@ -564,8 +564,8 @@ jobs:
               'body':  'Auto-implements #' + os.environ['ISSUE'] + '.\n\nOpen this PR to merge the AI-generated fix.',
           }))
           PYEOF
-          RESP=$(curl -s -X POST "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/pulls" \
-            -H "Authorization: token $FORGEJO_TOKEN" \
+          RESP=$(curl -s -X POST "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls" \
+            -H "Authorization: token $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
             -d @/tmp/pr_body.json)
           echo "$RESP"
@@ -740,7 +740,7 @@ jobs:
     steps:
       - name: Open PR issue-N -> devops
         env:
-          FORGEJO_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           HEAD: ${{ github.ref_name }}
           BASE: ${{ env.DEVOPS_BRANCH }}
         run: |
@@ -751,8 +751,8 @@ jobs:
             HEAD=$(echo "${{ github.ref }}" | sed 's|refs/heads/||')
           fi
           EXISTING=$(curl -s \
-            "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/pulls?state=open&head=$HEAD&base=$BASE" \
-            -H "Authorization: token $FORGEJO_TOKEN")
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls?state=open&head=$HEAD&base=$BASE" \
+            -H "Authorization: token $GITHUB_TOKEN")
           COUNT=$(echo "$EXISTING" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo 0)
           if [ "$COUNT" -gt 0 ]; then
             echo "PR already open for $HEAD -> $BASE - skipping."
@@ -767,8 +767,8 @@ jobs:
               'body':  'Automated PR from CI pipeline.',
           }))
           PYEOF
-          RESP=$(curl -s -X POST "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/pulls" \
-            -H "Authorization: token $FORGEJO_TOKEN" \
+          RESP=$(curl -s -X POST "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls" \
+            -H "Authorization: token $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
             -d @/tmp/pr_body.json)
           if echo "$RESP" | grep -q '"id"'; then
