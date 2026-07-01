@@ -55,4 +55,4 @@ WORKDIR /data
 
 RUN node --version && npm --version && cargo --version && \
     opencode --version && forgejo-runner --version && \
-    podman --version && ocx --version
+    ocx --version
