@@ -41,7 +41,7 @@ RUN npm install -g opencode-ai
 RUN curl -fsSL https://ocx.kdco.dev/install.sh | sh
 ENV PATH="/root/.local/bin:${PATH}"
 RUN ocx init && \
-    ocx registry add kdco https://registry.kdco.dev && \
+    ocx registry add --name kdco https://registry.kdco.dev && \
     ocx add kdco/workspace
 
 # Forgejo runner binary
