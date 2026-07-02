@@ -51,6 +51,13 @@ COPY --from=code.forgejo.org/forgejo/runner:6.2.2 /bin/forgejo-runner /usr/local
 RUN mkdir -p /root/.config/opencode
 COPY opencode-config/opencode.json /root/.config/opencode/opencode.json
 
+# Kaniko - build container images without Docker-in-Docker
+# https://github.com/GoogleContainerTools/kaniko
+RUN curl -fsSL https://github.com/GoogleContainerTools/kaniko/releases/download/v1.19.2/executor.tar.gz \
+    | tar -xzf - -C /usr/local/bin && \
+    chmod +x /usr/local/bin/executor && \
+    ln -s /usr/local/bin/executor /kaniko/executor
+
 WORKDIR /data
 
 RUN node --version && npm --version && cargo --version && \
