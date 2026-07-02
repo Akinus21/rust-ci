@@ -53,9 +53,10 @@ COPY opencode-config/opencode.json /root/.config/opencode/opencode.json
 
 # Kaniko - build container images without Docker-in-Docker
 # https://github.com/GoogleContainerTools/kaniko
-RUN curl -fsSL https://github.com/GoogleContainerTools/kaniko/releases/download/v1.19.2/executor.tar.gz \
+RUN curl -fsSL https://github.com/GoogleContainerTools/kaniko/releases/download/v1.19.2/executor-Linux-amd64.tar.gz \
     | tar -xzf - -C /usr/local/bin && \
     chmod +x /usr/local/bin/executor && \
+    mkdir -p /kaniko && \
     ln -s /usr/local/bin/executor /kaniko/executor
 
 WORKDIR /data
