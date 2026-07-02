@@ -51,13 +51,13 @@ COPY --from=code.forgejo.org/forgejo/runner:6.2.2 /bin/forgejo-runner /usr/local
 RUN mkdir -p /root/.config/opencode
 COPY opencode-config/opencode.json /root/.config/opencode/opencode.json
 
-# Kaniko - build container images without Docker-in-Docker
-# https://github.com/GoogleContainerTools/kaniko
-RUN curl -fsSL https://github.com/GoogleContainerTools/kaniko/releases/download/v1.19.2/executor-Linux-amd64.tar.gz \
-    | tar -xzf - -C /usr/local/bin && \
-    chmod +x /usr/local/bin/executor && \
-    mkdir -p /kaniko && \
-    ln -s /usr/local/bin/executor /kaniko/executor
+# Podman rootless configuration
+# Configure subuid/subgid for rootless podman
+RUN echo "root:100000:65536" > /etc/subuid && \
+    echo "root:100000:65536" > /etc/subgid && \
+    mkdir -p /etc/containers && \
+    printf '[storage]\ndriver = "vfs"\n' > /etc/containers/storage.conf && \
+    printf '[registries.insecure]\nregistries = ["forge.akinus21.com"]\n' >> /etc/containers/registries.conf
 
 WORKDIR /data
 
